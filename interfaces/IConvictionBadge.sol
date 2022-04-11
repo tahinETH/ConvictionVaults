@@ -14,7 +14,7 @@ interface IConvictionBadge {
 
     function setTimeLockedVaults(address timeLockedWallet) external;
 
-    function changeEscrowContract(address escrowContract)
+    function changeVFContract(address escrowContract)
         external
         returns (address);
 

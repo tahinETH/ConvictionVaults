@@ -7,7 +7,7 @@ import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 contract TestCollectible is ERC721 {
     uint256 public tokenCounter;
 
-    constructor() public ERC721("TestingConviction", "tCNC") {
+    constructor() ERC721("TestingConviction", "tCNC") {
         tokenCounter = 0;
     }
 

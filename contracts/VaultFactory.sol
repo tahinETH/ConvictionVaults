@@ -56,7 +56,7 @@ contract VaultFactory {
     /**
      * @notice Creates a new TimeLockedVault and adds it to the permission list on Conviction Badge contract.
      * @param restrictionState Determines if locking and withdrawing are open to everyone or needs manual authorization.
-     * @param vaultNAme Name of the new vault.
+     * @param vaultName Name of the new vault.
      **/
     function createNewVault(bool restrictionState, string memory vaultName)
         public
@@ -67,8 +67,8 @@ contract VaultFactory {
         TimeLockedVault Vault = new TimeLockedVault(
             msg.sender,
             convictionBadgeAddress,
-            _vaultName,
-            _restrictionState,
+            vaultName,
+            restrictionState,
             mintBadgeFee
         );
         emit VaultCreation(address(Vault), msg.sender);
@@ -96,7 +96,7 @@ contract VaultFactory {
         public
         onlyOwner
     {
-        convictionBadge.changeVaultFactoryContract(newvaultFactoryContract);
+        convictionBadge.changeVFContract(newvaultFactoryContract);
         emit vaultFactoryContractChange(newvaultFactoryContract);
     }
 

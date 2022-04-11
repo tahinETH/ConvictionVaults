@@ -47,7 +47,7 @@ contract TimeLockedVault is IERC721Receiver {
     /**
     @param _owner The address of the vault owner.
     @param _convictionBadgeAddress The address of the conviction badge contract.
-    @param _vaultNAme Name of the vault.
+    @param _vaultName Name of the vault.
     @param _restrictionState Determines if locking and withdrawing are open to everyone or needs manual authorization.
      */
 
@@ -88,7 +88,7 @@ contract TimeLockedVault is IERC721Receiver {
 
     /**
      * @notice Changes access authorization
-     * @param _newAuthorized The address list of new vault participants.
+     * @param newAuthorized The address list of new vault participants.
      */
 
     function AuthorizeToUse(address[] memory newAuthorized) public onlyOwner {
@@ -155,7 +155,7 @@ contract TimeLockedVault is IERC721Receiver {
         }
 
         (address _lockTokenAddress, uint256 _lockTokenId) = getNFTData(
-            _tokenAddress,
+            _lockedNFTAddress,
             _lockedNFTId
         );
 
@@ -220,11 +220,11 @@ contract TimeLockedVault is IERC721Receiver {
         return unlockDate;
     }
 
-    function getNFTData(address _tokenAddress, uint256 _lockedNFTId)
+    function getNFTData(address _lockedNFTAddress, uint256 _lockedNFTId)
         public
         returns (address, uint256)
     {
-        IERC721 tokenToBeLocked = IERC721(_tokenAddress);
+        IERC721 tokenToBeLocked = IERC721(_lockedNFTAddress);
         require(
             tokenToBeLocked.balanceOf(msg.sender) > 0,
             "You don't own any NFTs"
@@ -233,7 +233,7 @@ contract TimeLockedVault is IERC721Receiver {
             msg.sender == tokenToBeLocked.ownerOf(_lockedNFTId),
             "You don't own this NFT!"
         );
-        return (_tokenAddress, _lockedNFTId);
+        return (_lockedNFTAddress, _lockedNFTId);
 
         // takes NFT data from the escrow user
     }
@@ -303,7 +303,7 @@ contract TimeLockedVault is IERC721Receiver {
         uint256 _lockedNFTId,
         uint256 unlockDate
     ) internal virtual {
-        VaultInfo[vault_accessor].tokenAddresses.push(_lockTokenAddress);
+        VaultInfo[vault_accessor].tokenAddresses.push(_lockedNFTAddress);
         VaultInfo[vault_accessor].tokenIDs.push(_lockedNFTId);
         VaultInfo[vault_accessor].lockPeriods.push(unlockDate);
         LockerRoom.push(vault_accessor);
@@ -339,11 +339,11 @@ contract TimeLockedVault is IERC721Receiver {
     }
 
     function _withdraw(
-        address _tokenAddress,
+        address _lockedNFTAddress,
         uint256 _lockedNFTId,
         address _withdrawer
     ) internal {
-        IERC721(_tokenAddress).transferFrom(
+        IERC721(_lockedNFTAddress).transferFrom(
             address(this),
             _withdrawer,
             _lockedNFTId

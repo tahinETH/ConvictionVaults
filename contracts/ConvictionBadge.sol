@@ -149,10 +149,10 @@ contract ConvictionBadge is ERC721URIStorage {
 
     /**
      * @notice For updating the underlying lock contract
-     * @param Address of the new vaultFactory Contract that will produce time-locked vaults.
+     * @param _vaultFactoryContract of the new vaultFactory Contract that will produce time-locked vaults.
      */
 
-    function changeVaultFactoryContract(address _vaultFactoryContract)
+    function changeVFContract(address _vaultFactoryContract)
         external
         onlyVaultFactory
         returns (address)
@@ -222,7 +222,7 @@ contract ConvictionBadge is ERC721URIStorage {
 
     /**
      * @notice Stores the NFT address, the NFT token Id, and the lock period corresponding to a badge token upon a new mint.
-     * @param _newTokenID conviction badge token ID to be updated.
+     * @param newTokenID conviction badge token ID to be updated.
      * @param _lockPeriod Index of an array that indicates the lockup period of the NFT.
      * @param _lockedNFTID Token ID of the locked NFT.
      * @param _lockedNFTAddress Address of the NFT collection locked token belongs to.
@@ -312,8 +312,8 @@ contract ConvictionBadge is ERC721URIStorage {
      * @notice Internal function called by mergeMint to merge multiple conviction badges rewarded for the same NFT
      * (e.g. CoolCat #3432 locked twice for 3 months and once for 6 months.
      * mergeMint will mint a new conviction badge for 12 months in exchange for the three badges.)
-     * @param _mintee Address of the merging account that will receive the conviction badge corresponding to the merge.
-     * @param _lockPeriod Index of an array that indicates the sum of the lock periods of the badge.
+     * @param mintee Address of the merging account that will receive the conviction badge corresponding to the merge.
+     * @param lockPeriod Index of an array that indicates the sum of the lock periods of the badge.
      * @param _lockedNFTID Token ID of the locked NFT.
      * @param _lockedNFTAddress Address of the NFT collection locked token belongs to.
      */
@@ -321,12 +321,12 @@ contract ConvictionBadge is ERC721URIStorage {
         address mintee,
         uint256 newTokenID,
         uint256 lockPeriod,
-        uint256 lockedNFTID,
-        address lockedNFTAddress
+        uint256 _lockedNFTID,
+        address _lockedNFTAddress
     ) internal {
         //imported from openzeppelin
         _safeMint(mintee, newTokenID);
         _setTokenURI(newTokenID, lockPeriod);
-        _setTokenInfo(newTokenID, lockPeriod, lockedNFTID, lockedNFTAddress);
+        _setTokenInfo(newTokenID, lockPeriod, _lockedNFTID, _lockedNFTAddress);
     }
 }
