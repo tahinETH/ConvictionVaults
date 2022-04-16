@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: MIT
 
 pragma solidity ^0.8.0;
-import "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
-import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
+
+import {IERC721Receiver} from "../dependencies/openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
+import {IERC721} from "../dependencies/openzeppelin/contracts/token/ERC721/IERC721.sol";
 import {IConvictionBadge} from "../interfaces/IConvictionBadge.sol";
 
 /**
@@ -13,7 +14,7 @@ import {IConvictionBadge} from "../interfaces/IConvictionBadge.sol";
 contract MergeBadges is IERC721Receiver {
     IConvictionBadge convictionBadge;
     IERC721 convictionBadgeERC721Basics;
-    address convictionBadgeAddress;
+    address public convictionBadgeAddress;
 
     /**@param _convictionBadgeAddress Address of the conviction badge address.
      */
@@ -42,7 +43,12 @@ contract MergeBadges is IERC721Receiver {
         _checkOwnership(_tokenIDs);
         uint256 newLockPeriod = _checkTokenInfo(_tokenIDs);
         _transferToMerge(_tokenIDs);
-        _mintMergedTokens(_tokenIDs, newLockPeriod, mintee_);
+        uint256 newTokenID = _mintMergedTokens(
+            _tokenIDs,
+            newLockPeriod,
+            mintee_
+        );
+        return (newTokenID);
     }
 
     /**
@@ -52,6 +58,7 @@ contract MergeBadges is IERC721Receiver {
      */
     function _checkTokenInfo(uint256[] memory _tokenIDs)
         internal
+        view
         returns (uint256)
     {
         uint256 newLockPeriod = 0;
@@ -89,7 +96,7 @@ contract MergeBadges is IERC721Receiver {
      * @notice Checks if the merger owns the badges.
      * @param _tokenIDs A list of conviction badge IDs to be merged together.
      */
-    function _checkOwnership(uint256[] memory _tokenIDs) internal {
+    function _checkOwnership(uint256[] memory _tokenIDs) internal view {
         for (uint256 i = 0; i < _tokenIDs.length; i++) {
             require(
                 msg.sender == convictionBadgeERC721Basics.ownerOf(_tokenIDs[i]),
@@ -125,7 +132,7 @@ contract MergeBadges is IERC721Receiver {
         uint256[] memory _tokenIDs,
         uint256 _newLockPeriod,
         address mintee
-    ) internal {
+    ) internal returns (uint256) {
         uint256 newLockPeriodIndex;
         uint256 lockedtokenID = convictionBadge.getTokenInfoLTI(_tokenIDs[0]);
         address lockedTokenAddress = convictionBadge.getTokenInfoLTA(
@@ -141,12 +148,13 @@ contract MergeBadges is IERC721Receiver {
             newLockPeriodIndex = 0;
         }
 
-        convictionBadge.mergeMint(
+        uint256 newTokenID = convictionBadge.mergeMint(
             mintee,
             newLockPeriodIndex,
             lockedtokenID,
             lockedTokenAddress
         );
+        return (newTokenID);
     }
 
     function onERC721Received(

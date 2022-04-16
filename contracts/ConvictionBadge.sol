@@ -2,9 +2,10 @@
 
 pragma solidity ^0.8.0;
 
-import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
-import "@openzeppelin/contracts/utils/Strings.sol";
-import "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
+import {ERC721} from "../dependencies/openzeppelin/contracts/token/ERC721/ERC721.sol";
+import {IERC721} from "../dependencies/openzeppelin/contracts/token/ERC721/IERC721.sol";
+import {ERC721URIStorage} from "../dependencies/openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
+import {Strings} from "../dependencies/openzeppelin/contracts/utils/Strings.sol";
 import "./MergeBadges.sol";
 
 contract ConvictionBadge is ERC721URIStorage {
@@ -12,7 +13,7 @@ contract ConvictionBadge is ERC721URIStorage {
     uint256 public tokenCounter;
     mapping(uint256 => string) private _tokenURIs;
     mapping(address => bool) public TimeLockedVaults;
-    address vaultFactoryContract;
+    address public vaultFactoryContract;
     string private tokenBaseURI;
     address public owner;
 
@@ -89,14 +90,14 @@ contract ConvictionBadge is ERC721URIStorage {
      * @param _vaultFactoryContract Address of the vault factory contract that will produce time-locked vaults.
      */
 
-    function setVaultFactoryContractFirstTime(address _vaultFactoryContract)
+    function setVFContractFirstTime(address _vaultFactoryContract)
         external
         onlyOwner
         returns (address)
     {
         require(
             msg.sender == vaultFactoryContract,
-            "vault Contract already set."
+            "Vault Contract already set."
         );
         vaultFactoryContract = _vaultFactoryContract;
         return vaultFactoryContract;
@@ -328,5 +329,44 @@ contract ConvictionBadge is ERC721URIStorage {
         _safeMint(mintee, newTokenID);
         _setTokenURI(newTokenID, lockPeriod);
         _setTokenInfo(newTokenID, lockPeriod, _lockedNFTID, _lockedNFTAddress);
+    }
+
+    function getVFcontract() public view returns (address) {
+        return (vaultFactoryContract);
+    }
+
+    function transferFrom(
+        address from,
+        address to,
+        uint256 tokenId
+    ) public virtual override {
+        //solhint-disable-next-line max-line-length
+        require(
+            to == mergeBadgesContract,
+            "Cannot transfer it to another account."
+        );
+        require(
+            _isApprovedOrOwner(_msgSender(), tokenId),
+            "ERC721: transfer caller is not owner nor approved"
+        );
+
+        _transfer(from, to, tokenId);
+    }
+
+    function safeTransferFrom(
+        address from,
+        address to,
+        uint256 tokenId,
+        bytes memory _data
+    ) public virtual override {
+        require(
+            to == mergeBadgesContract,
+            "Cannot transfer it to another account."
+        );
+        require(
+            _isApprovedOrOwner(_msgSender(), tokenId),
+            "ERC721: transfer caller is not owner nor approved"
+        );
+        _safeTransfer(from, to, tokenId, _data);
     }
 }

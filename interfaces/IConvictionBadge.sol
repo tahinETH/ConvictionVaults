@@ -3,7 +3,7 @@
 pragma solidity ^0.8.0;
 
 interface IConvictionBadge {
-    function setEscrowContractFirstTime(address escrowContract) external;
+    function setVFContractFirstTime(address escrowContract) external;
 
     function createCollectible(
         address mintee,

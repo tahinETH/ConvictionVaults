@@ -2,9 +2,9 @@
 
 pragma solidity ^0.8.0;
 
-import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
-import "./TimeLockedVault.sol";
+import {IERC721} from "../dependencies/openzeppelin/contracts/token/ERC721/IERC721.sol";
 import {IConvictionBadge} from "../interfaces/IConvictionBadge.sol";
+import "./TimeLockedVault.sol";
 
 /**
  * A factory for creating vault contracts.

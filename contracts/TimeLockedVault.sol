@@ -4,10 +4,10 @@
 
 pragma solidity ^0.8.0;
 
-import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
-import "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
-import "./ConvictionBadge.sol";
+import {ERC721} from "../dependencies/openzeppelin/contracts/token/ERC721/ERC721.sol";
+import {IERC721Receiver} from "../dependencies/openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 import {IConvictionBadge} from "../interfaces/IConvictionBadge.sol";
+import "./ConvictionBadge.sol";
 
 /**
  * A box without hinges, key, or lid, yet golden treasure inside is hid.
@@ -195,7 +195,7 @@ contract TimeLockedVault is IERC721Receiver {
      * @notice Calculates the unlock date for the lock period
      */
 
-    function getTimeLock(uint256 _lockPeriod) public returns (uint256) {
+    function getTimeLock(uint256 _lockPeriod) public view returns (uint256) {
         require(
             _lockPeriod >= 0 && _lockPeriod < 4,
             "UnlockDate not included in time options!"
@@ -281,7 +281,7 @@ contract TimeLockedVault is IERC721Receiver {
                 wenUnlock = VaultInfo[msg.sender].lockPeriods[lockedIndex];
                 require(
                     block.timestamp >= wenUnlock,
-                    "You need to wait more lmao"
+                    "You need to wait until unlock date."
                 );
                 _withdraw(_lockedNFTAddress, _lockedNFTId, msg.sender);
                 _updateAfterWithdrawal(lockedIndex, msg.sender);
