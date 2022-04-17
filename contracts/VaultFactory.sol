@@ -2,9 +2,10 @@
 
 pragma solidity ^0.8.0;
 
-import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
-import "./TimeLockedVault.sol";
+import {IERC721} from "../dependencies/openzeppelin/contracts/token/ERC721/IERC721.sol";
 import {IConvictionBadge} from "../interfaces/IConvictionBadge.sol";
+import "./TimeLockedVault.sol";
+import {LockingStorage} from "./LockingStorage.sol";
 
 /**
  * A factory for creating vault contracts.
@@ -14,20 +15,17 @@ import {IConvictionBadge} from "../interfaces/IConvictionBadge.sol";
  *
  **/
 
-contract VaultFactory {
+contract VaultFactory is LockingStorage {
     IConvictionBadge convictionBadge;
     address convictionBadgeAddress;
-    address[] public VaultAddresses;
     address public owner;
     uint256 public mintBadgeFee;
-    mapping(address => Vaults[]) public AddressToVaults;
+    address public lockingStorageAddress;
+    mapping(address => bool) private TimeLockedVaults;
+
     event Received(address, uint256);
     event VaultCreation(address _newVault, address _newVaultOwner);
     event vaultFactoryContractChange(address _newvaultFactoryContract);
-    struct Vaults {
-        address VaultOwner;
-        address VaultAddress;
-    }
 
     /**
      * @param _owner Owner of the vault factory contract.
@@ -43,6 +41,8 @@ contract VaultFactory {
         owner = _owner;
         convictionBadgeAddress = _convictionBadgeAddress;
         convictionBadge = IConvictionBadge(_convictionBadgeAddress);
+        LockingStorage lockingStorage = new LockingStorage();
+        lockingStorageAddress = address(lockingStorage);
     }
 
     modifier onlyOwner() {
@@ -52,31 +52,35 @@ contract VaultFactory {
         );
         _;
     }
+    modifier onlyTimeLockedVaults() {
+        require(
+            TimeLockedVaults[msg.sender] == true,
+            "Only a time-locked vault can do this."
+        );
+        _;
+    }
 
     /**
      * @notice Creates a new TimeLockedVault and adds it to the permission list on Conviction Badge contract.
-     * @param restrictionState Determines if locking and withdrawing are open to everyone or needs manual authorization.
+     * @param accessRestriction Determines if locking and withdrawing are open to everyone or needs manual authorization.
      * @param vaultName Name of the new vault.
      **/
-    function createNewVault(bool restrictionState, string memory vaultName)
-        public
-        returns (address)
-    {
-        Vaults memory currentVault;
-
+    function createNewVault(
+        bool accessRestriction,
+        bool nftRestriction,
+        string memory vaultName
+    ) public returns (address) {
         TimeLockedVault Vault = new TimeLockedVault(
             msg.sender,
             convictionBadgeAddress,
             vaultName,
-            restrictionState,
+            accessRestriction,
+            nftRestriction,
             mintBadgeFee
         );
         emit VaultCreation(address(Vault), msg.sender);
-        addNewTLVToConviction(address(Vault));
-
-        currentVault.VaultOwner = msg.sender;
-        currentVault.VaultAddress = address(Vault);
-        AddressToVaults[msg.sender].push(currentVault);
+        _addNewTLVToConviction(address(Vault));
+        AddressToVaults[msg.sender].push(address(Vault));
         VaultAddresses.push(address(Vault));
 
         return address(Vault);
@@ -103,7 +107,21 @@ contract VaultFactory {
     /**
      * @notice Adds the new time-locked vault to the Conviction Badge authorization.
      */
-    function addNewTLVToConviction(address newTLV) internal {
+    function _addNewTLVToConviction(address newTLV) internal {
         convictionBadge.setTimeLockedVaults(newTLV);
+        TimeLockedVaults[newTLV] = true;
+    }
+
+    function updateEXP(
+        address lockedNFTAddress,
+        uint256 lockedNFTId,
+        uint256 lockedUntil
+    ) external onlyTimeLockedVaults {
+        expForSpecificNFT[msg.sender][lockedNFTAddress][lockedNFTId] =
+            expForSpecificNFT[msg.sender][lockedNFTAddress][lockedNFTId] +
+            lockedUntil;
+        expForCollection[msg.sender][lockedNFTAddress] =
+            expForCollection[msg.sender][lockedNFTAddress] +
+            lockedUntil;
     }
 }

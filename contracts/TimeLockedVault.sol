@@ -4,10 +4,10 @@
 
 pragma solidity ^0.8.0;
 
-import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
-import "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
-import "./ConvictionBadge.sol";
+import {ERC721} from "../dependencies/openzeppelin/contracts/token/ERC721/ERC721.sol";
+import {IERC721Receiver} from "../dependencies/openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 import {IConvictionBadge} from "../interfaces/IConvictionBadge.sol";
+import "./ConvictionBadge.sol";
 
 /**
  * A box without hinges, key, or lid, yet golden treasure inside is hid.
@@ -25,7 +25,8 @@ contract TimeLockedVault is IERC721Receiver {
     address[] public LockerRoom;
     uint256 public mintBadgeFee;
     string public vaultName;
-    bool restrictionState;
+    bool accessRestriction;
+    bool nftRestriction;
     IConvictionBadge convictionBadge;
 
     event DepositNFT(address tokenAddress, uint256 tokenID, uint256 lockperiod);
@@ -42,25 +43,30 @@ contract TimeLockedVault is IERC721Receiver {
     }
 
     mapping(address => Vaulted) private VaultInfo;
-    mapping(address => bool) public mappingAuthorizedAccounts;
+    mapping(address => bool) private acceptedCollectionMapping;
+    mapping(address => bool) private mappingAuthorizedNFTs;
+    mapping(address => bool) private mappingAuthorizedAccounts;
 
     /**
     @param _owner The address of the vault owner.
     @param _convictionBadgeAddress The address of the conviction badge contract.
     @param _vaultName Name of the vault.
-    @param _restrictionState Determines if locking and withdrawing are open to everyone or needs manual authorization.
+    @param _accessRestriction Determines whether locking and withdrawing are open to everyone or needs manual authorization.
+    @param _nftRestriction Determines whether the vault is gated or open to every collection.
      */
 
     constructor(
         address _owner,
         address _convictionBadgeAddress,
         string memory _vaultName,
-        bool _restrictionState,
+        bool _accessRestriction,
+        bool _nftRestriction,
         uint256 _mintBadgeFee
     ) {
         vaultName = _vaultName;
         owner = _owner;
-        restrictionState = _restrictionState;
+        accessRestriction = _accessRestriction;
+        nftRestriction = _nftRestriction;
         convictionBadgeAddress = _convictionBadgeAddress;
         convictionBadge = IConvictionBadge(convictionBadgeAddress);
         mintBadgeFee = _mintBadgeFee;
@@ -74,8 +80,8 @@ contract TimeLockedVault is IERC721Receiver {
         _;
     }
 
-    modifier AuthorizedAccounts() {
-        if (restrictionState) {
+    modifier authorizedAccounts() {
+        if (accessRestriction) {
             require(
                 msg.sender == owner || mappingAuthorizedAccounts[msg.sender],
                 "You are not authorized to do this!"
@@ -86,13 +92,33 @@ contract TimeLockedVault is IERC721Receiver {
         }
     }
 
+    modifier acceptedCollections(address _lockedNFTAddress) {
+        if (nftRestriction) {
+            require(
+                acceptedCollectionMapping[_lockedNFTAddress] == true,
+                "This collection is not allowed in this vault"
+            );
+            _;
+        } else {
+            _;
+        }
+    }
+
+    function acceptCollection(address _lockedNFTAddress) public onlyOwner {
+        acceptedCollectionMapping[_lockedNFTAddress] = true;
+    }
+
+    function removeCollection(address _lockedNFTAddress) public onlyOwner {
+        acceptedCollectionMapping[_lockedNFTAddress] = false;
+    }
+
     /**
      * @notice Changes access authorization
      * @param newAuthorized The address list of new vault participants.
      */
 
-    function AuthorizeToUse(address[] memory newAuthorized) public onlyOwner {
-        require(restrictionState == true, "This vault is not restricted.");
+    function authorizeToUse(address[] memory newAuthorized) public onlyOwner {
+        require(accessRestriction == true, "This vault is not restricted.");
         for (uint256 i = 0; i < newAuthorized.length; i++) {
             mappingAuthorizedAccounts[newAuthorized[i]] = true;
         }
@@ -107,7 +133,7 @@ contract TimeLockedVault is IERC721Receiver {
         public
         onlyOwner
     {
-        require(restrictionState == true, "This vault is not restricted.");
+        require(accessRestriction == true, "This vault is not restricted.");
 
         for (uint256 i = 0; i < toBeUnauthorized.length; i++) {
             require(mappingAuthorizedAccounts[toBeUnauthorized[i]] = true);
@@ -134,7 +160,13 @@ contract TimeLockedVault is IERC721Receiver {
         uint256 _lockedNFTId,
         uint256 _lockPeriod,
         bool mintState
-    ) public payable AuthorizedAccounts returns (uint256) {
+    )
+        public
+        payable
+        authorizedAccounts
+        acceptedCollections(_lockedNFTAddress)
+        returns (uint256)
+    {
         address vault_accessor = msg.sender;
         require(
             _lockPeriod >= 0 && _lockPeriod < 4,
@@ -154,7 +186,7 @@ contract TimeLockedVault is IERC721Receiver {
             );
         }
 
-        (address _lockTokenAddress, uint256 _lockTokenId) = getNFTData(
+        (address _lockTokenAddress, uint256 _lockTokenId) = _getNFTData(
             _lockedNFTAddress,
             _lockedNFTId
         );
@@ -171,6 +203,7 @@ contract TimeLockedVault is IERC721Receiver {
             _lockTokenId,
             lockedUntil
         );
+        _updateEXP(_lockTokenAddress, _lockTokenId, lockedUntil);
 
         if (mintState == true) {
             uint256 newTokenId = _mintBadge(
@@ -187,6 +220,12 @@ contract TimeLockedVault is IERC721Receiver {
         }
     }
 
+    function _updateEXP(
+        address lockedNFTAddress,
+        uint256 lockedNFTId,
+        uint256 lockedUntil
+    ) internal {}
+
     function returnBalance() public view returns (uint256) {
         return (address(this).balance);
     }
@@ -195,33 +234,34 @@ contract TimeLockedVault is IERC721Receiver {
      * @notice Calculates the unlock date for the lock period
      */
 
-    function getTimeLock(uint256 _lockPeriod) public returns (uint256) {
+    function getTimeLock(uint256 _lockPeriod) public view returns (uint256) {
         require(
             _lockPeriod >= 0 && _lockPeriod < 4,
             "UnlockDate not included in time options!"
         );
         uint256 unlockDate;
-        // A MONTH
-        if (_lockPeriod == 0) {
-            unlockDate = block.timestamp + 30 days;
-        }
         // THREE MONTHS
-        else if (_lockPeriod == 1) {
+        if (_lockPeriod == 0) {
             unlockDate = block.timestamp + 90 days;
         }
         // SIX MONTHS
-        else if (_lockPeriod == 2) {
+        else if (_lockPeriod == 1) {
             unlockDate = block.timestamp + 180 days;
         }
         // A YEAR
+        else if (_lockPeriod == 2) {
+            unlockDate = block.timestamp + 365 days;
+        }
+        // TWO YEARS
         else if (_lockPeriod == 3) {
-            unlockDate = block.timestamp + 360 days;
+            unlockDate = block.timestamp + 730 days;
         }
         return unlockDate;
     }
 
-    function getNFTData(address _lockedNFTAddress, uint256 _lockedNFTId)
-        public
+    function _getNFTData(address _lockedNFTAddress, uint256 _lockedNFTId)
+        internal
+        view
         returns (address, uint256)
     {
         IERC721 tokenToBeLocked = IERC721(_lockedNFTAddress);
@@ -265,7 +305,7 @@ contract TimeLockedVault is IERC721Receiver {
      */
     function withdraw(address _lockedNFTAddress, uint256 _lockedNFTId)
         external
-        AuthorizedAccounts
+        authorizedAccounts
     {
         uint256 wenUnlock;
         for (
@@ -281,7 +321,7 @@ contract TimeLockedVault is IERC721Receiver {
                 wenUnlock = VaultInfo[msg.sender].lockPeriods[lockedIndex];
                 require(
                     block.timestamp >= wenUnlock,
-                    "You need to wait more lmao"
+                    "You need to wait until unlock date."
                 );
                 _withdraw(_lockedNFTAddress, _lockedNFTId, msg.sender);
                 _updateAfterWithdrawal(lockedIndex, msg.sender);
