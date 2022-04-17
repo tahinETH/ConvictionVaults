@@ -6,25 +6,23 @@ import {ERC721} from "../dependencies/openzeppelin/contracts/token/ERC721/ERC721
 import {IERC721} from "../dependencies/openzeppelin/contracts/token/ERC721/IERC721.sol";
 import {ERC721URIStorage} from "../dependencies/openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
 import {Strings} from "../dependencies/openzeppelin/contracts/utils/Strings.sol";
-import "./MergeBadges.sol";
+import {LockingStorage} from "./LockingStorage.sol";
 
 contract ConvictionBadge is ERC721URIStorage {
     using Strings for uint256;
     uint256 public tokenCounter;
     mapping(uint256 => string) private _tokenURIs;
-    mapping(address => bool) public TimeLockedVaults;
+
     address public vaultFactoryContract;
     string private tokenBaseURI;
     address public owner;
-
-    address mergeBadgesContract;
 
     //URIs for four lock periods
     string private baseURI1;
     string private baseURI2;
     string private baseURI3;
     string private baseURI4;
-
+    mapping(address => bool) internal TimeLockedVaults;
     mapping(uint256 => TokenInfo) public tokenInfo;
     uint256[4] public lockPeriodsToMonths;
 
@@ -47,12 +45,10 @@ contract ConvictionBadge is ERC721URIStorage {
         baseURI2 = uris[1];
         baseURI3 = uris[2];
         baseURI4 = uris[3];
-        lockPeriodsToMonths[0] = 1;
-        lockPeriodsToMonths[1] = 3;
-        lockPeriodsToMonths[2] = 6;
-        lockPeriodsToMonths[3] = 12;
-        MergeBadges mergeBadges = new MergeBadges(address(this));
-        mergeBadgesContract = address(mergeBadges);
+        lockPeriodsToMonths[0] = 3;
+        lockPeriodsToMonths[1] = 6;
+        lockPeriodsToMonths[2] = 12;
+        lockPeriodsToMonths[3] = 24;
     }
 
     modifier onlyVaultFactory() {
@@ -73,14 +69,6 @@ contract ConvictionBadge is ERC721URIStorage {
     }
     modifier onlyOwner() {
         require(msg.sender == owner, "You are not the contract owner.");
-        _;
-    }
-
-    modifier onlyMergeContract() {
-        require(
-            msg.sender == mergeBadgesContract,
-            "This is not the badge merging contract."
-        );
         _;
     }
 
@@ -117,6 +105,19 @@ contract ConvictionBadge is ERC721URIStorage {
     }
 
     /**
+     * @notice Sets who can access the createCollectible function. Can be called only by the vault factory contract.
+     * @param _TimeLockedVault address of the to-be-authorized time-locked vault.
+     */
+
+    function setTimeLockedVaults(address _TimeLockedVault)
+        external
+        virtual
+        onlyVaultFactory
+    {
+        TimeLockedVaults[_TimeLockedVault] = true;
+    }
+
+    /**
      * @notice Gets the Token ID of the locked NFT corresponding to a conviction Badge Id.
      * @param _tokenID conviction Badge Id
      */
@@ -142,10 +143,6 @@ contract ConvictionBadge is ERC721URIStorage {
         returns (uint256)
     {
         return (tokenInfo[_tokenID].lockPeriod);
-    }
-
-    function getMergeContract() public view returns (address) {
-        return mergeBadgesContract;
     }
 
     /**
@@ -214,7 +211,6 @@ contract ConvictionBadge is ERC721URIStorage {
         uint256 newTokenID = tokenCounter;
 
         _safeMint(_mintee, newTokenID);
-
         _setTokenURI(newTokenID, _lockPeriod);
         _setTokenInfo(newTokenID, _lockPeriod, _lockedNFTID, _lockedNFTAddress);
         tokenCounter = tokenCounter + 1;
@@ -241,72 +237,152 @@ contract ConvictionBadge is ERC721URIStorage {
         tokenInfo[newTokenID].exists = true;
     }
 
-    /**
-     * @notice Sets who can access the createCollectible function. Can be called only by the vault factory contract.
-     * @param _TimeLockedVault address of the to-be-authorized time-locked vault.
-     */
-
-    function setTimeLockedVaults(address _TimeLockedVault)
-        external
-        virtual
-        onlyVaultFactory
-    {
-        TimeLockedVaults[_TimeLockedVault] = true;
-    }
-
-    /**
-     * @notice Sets who can access the createCollectible function. Can be called only by the vault factory contract.
-     * @param _TimeLockedVault address of the to-be-unauthorized time-locked vault.
-     */
-    function removeTimeLockedVaults(address _TimeLockedVault)
-        external
-        virtual
-        onlyVaultFactory
-    {
-        TimeLockedVaults[_TimeLockedVault] = false;
-    }
-
-    /**
-     * @notice Allows the MergeContract to merge multiple conviction badges rewarded for the same NFT
-     * (e.g. CoolCat #3432 locked twice for 3 months and once for 6 months.
-     * mergeMint will mint a new conviction badge for 12 months in exchange for the three badges.)
-     * @param _mintee Address of the merging account that will receive the conviction badge corresponding to the merge.
-     * @param _lockPeriod Index of an array that indicates the sum of the lock periods of the badge.
-     * @param _lockedNFTID Token ID of the locked NFT.
-     * @param _lockedNFTAddress Address of the NFT collection locked token belongs to.
-     */
-    function mergeMint(
-        address _mintee,
-        uint256 _lockPeriod,
-        uint256 _lockedNFTID,
-        address _lockedNFTAddress
-    ) external onlyMergeContract returns (uint256) {
-        uint256 newTokenID = tokenCounter;
-        _mergeMint(
-            _mintee,
-            newTokenID,
-            _lockPeriod,
-            _lockedNFTID,
-            _lockedNFTAddress
+    function transferFrom(
+        address from,
+        address to,
+        uint256 tokenId
+    ) public virtual override {
+        //solhint-disable-next-line max-line-length
+        require(to == address(0), "Cannot transfer it to another account.");
+        require(
+            _isApprovedOrOwner(_msgSender(), tokenId),
+            "ERC721: transfer caller is not owner nor approved"
         );
-        tokenCounter = tokenCounter + 1;
+
+        _transfer(from, to, tokenId);
+    }
+
+    function safeTransferFrom(
+        address from,
+        address to,
+        uint256 tokenId,
+        bytes memory _data
+    ) public virtual override {
+        require(to == address(0), "Cannot transfer it to another account.");
+        require(
+            _isApprovedOrOwner(_msgSender(), tokenId),
+            "ERC721: transfer caller is not owner nor approved"
+        );
+        _safeTransfer(from, to, tokenId, _data);
+    }
+
+    /**
+     * @notice Transfer existing badges to the contract for minting the new
+     * @param _tokenIDs A list of conviction badge IDs to be merged together.
+     */
+
+    function _burnBadges(uint256[] memory _tokenIDs) internal {
+        //batch transfer
+        for (uint256 i = 0; i < _tokenIDs.length; i++) {
+            _burn(_tokenIDs[i]);
+        }
+    }
+
+    function mergeBadges(uint256[] memory _tokenIDs)
+        external
+        payable
+        returns (uint256)
+    {
+        address mintee_ = msg.sender;
+        require(
+            _tokenIDs.length > 1 && _tokenIDs.length < 9,
+            "Need to do this for multiple tokens."
+        );
+        _checkOwnership(_tokenIDs);
+        uint256 newLockPeriod = _checkTokenInfo(_tokenIDs);
+        _burnBadges(_tokenIDs);
+        uint256 newTokenID = _mergeBadges(_tokenIDs, newLockPeriod, mintee_);
         return (newTokenID);
     }
 
     /**
-     * @notice For updating the conviction badge merging contract.
-     * @param _newContract Address of the new merging contract.
+     * @notice Checks if all conviction badges are issued for the same NFT.
+     * Then calculates the sum of their lock periods.
+     * @param _tokenIDs A list of conviction badge IDs to be merged together.
      */
-    function changeMergeContract(address _newContract)
-        external
-        virtual
-        onlyOwner
+    function _checkTokenInfo(uint256[] memory _tokenIDs)
+        internal
+        view
+        returns (uint256)
     {
+        uint256 newLockPeriod = 0;
+        uint256 previouslockPeriod;
+        for (uint256 i = 0; i < _tokenIDs.length - 1; i++) {
+            require(
+                getTokenInfoLTI(_tokenIDs[i]) ==
+                    getTokenInfoLTI(_tokenIDs[i + 1]),
+                "Conviction doesn't belong to the same token!"
+            );
+            require(
+                getTokenInfoLTA(_tokenIDs[i]) ==
+                    getTokenInfoLTA(_tokenIDs[i + 1]),
+                "Conviction doesn't belong to the same token!"
+            );
+        }
+
+        for (uint256 i = 0; i < _tokenIDs.length; i++) {
+            previouslockPeriod = getTokenInfoLoP(_tokenIDs[i]);
+
+            require(
+                newLockPeriod + previouslockPeriod <= 24,
+                "Can only merge up to 2 years."
+            );
+            newLockPeriod = newLockPeriod + previouslockPeriod;
+        }
         require(
-            _newContract != address(0),
-            "MergeContract Error: Cannot set to 0x00."
+            newLockPeriod == 6 || newLockPeriod == 12 || newLockPeriod == 24,
+            "Token lock periods must total up to three, six, or twelve months."
         );
-        mergeBadgesContract = _newContract;
+        return newLockPeriod;
+    }
+
+    /**
+     * @notice Checks if the merger owns the badges.
+     * @param _tokenIDs A list of conviction badge IDs to be merged together.
+     */
+    function _checkOwnership(uint256[] memory _tokenIDs) internal view {
+        for (uint256 i = 0; i < _tokenIDs.length; i++) {
+            require(
+                msg.sender == ownerOf(_tokenIDs[i]),
+                "You don't own these tokens"
+            );
+        }
+    }
+
+    /**
+     * @notice Mint the merged conviction badge.
+     * @param _tokenIDs A list of conviction badge IDs to be merged together.
+     * @param _newLockPeriod New lock period to be assigned to the token.
+     * @param mintee The address of the badge receiver.
+     */
+
+    function _mergeBadges(
+        uint256[] memory _tokenIDs,
+        uint256 _newLockPeriod,
+        address mintee
+    ) internal returns (uint256) {
+        uint256 newLockPeriodIndex;
+        uint256 lockedtokenID = getTokenInfoLTI(_tokenIDs[0]);
+        address lockedTokenAddress = getTokenInfoLTA(_tokenIDs[0]);
+        if (_newLockPeriod == 6) {
+            newLockPeriodIndex = 1;
+        } else if (_newLockPeriod == 12) {
+            newLockPeriodIndex = 2;
+        } else if (_newLockPeriod == 24) {
+            newLockPeriodIndex = 3;
+        } else {
+            newLockPeriodIndex = 0;
+        }
+        uint256 newTokenID = tokenCounter;
+        _mergeMint(
+            mintee,
+            newTokenID,
+            newLockPeriodIndex,
+            lockedtokenID,
+            lockedTokenAddress
+        );
+        tokenCounter = tokenCounter + 1;
+        return (newTokenID);
     }
 
     /**
@@ -325,48 +401,8 @@ contract ConvictionBadge is ERC721URIStorage {
         uint256 _lockedNFTID,
         address _lockedNFTAddress
     ) internal {
-        //imported from openzeppelin
         _safeMint(mintee, newTokenID);
         _setTokenURI(newTokenID, lockPeriod);
         _setTokenInfo(newTokenID, lockPeriod, _lockedNFTID, _lockedNFTAddress);
-    }
-
-    function getVFcontract() public view returns (address) {
-        return (vaultFactoryContract);
-    }
-
-    function transferFrom(
-        address from,
-        address to,
-        uint256 tokenId
-    ) public virtual override {
-        //solhint-disable-next-line max-line-length
-        require(
-            to == mergeBadgesContract,
-            "Cannot transfer it to another account."
-        );
-        require(
-            _isApprovedOrOwner(_msgSender(), tokenId),
-            "ERC721: transfer caller is not owner nor approved"
-        );
-
-        _transfer(from, to, tokenId);
-    }
-
-    function safeTransferFrom(
-        address from,
-        address to,
-        uint256 tokenId,
-        bytes memory _data
-    ) public virtual override {
-        require(
-            to == mergeBadgesContract,
-            "Cannot transfer it to another account."
-        );
-        require(
-            _isApprovedOrOwner(_msgSender(), tokenId),
-            "ERC721: transfer caller is not owner nor approved"
-        );
-        _safeTransfer(from, to, tokenId, _data);
     }
 }
